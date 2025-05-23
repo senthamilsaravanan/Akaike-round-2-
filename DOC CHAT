@@ -1,0 +1,141 @@
+!pip install -q langchain openai faiss-cpu tiktoken ipywidgets sentence-transformers transformers torch
+from IPython import get_ipython
+from IPython.display import display
+import ipywidgets as widgets
+from IPython.display import display
+import numpy as np
+import faiss
+from sentence_transformers import SentenceTransformer
+from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
+import torch
+upload_widget = widgets.FileUpload(accept='.txt', multiple=False)
+display(upload_widget)
+text = ""
+def read_uploaded_file(change):
+    global text
+    if upload_widget.value:
+        uploaded_file = list(upload_widget.value.values())[0]
+        content_bytes = uploaded_file['content']
+        text = content_bytes.decode('utf-8')
+        print(" Document loaded successfully!\n")
+        print(text[:1000])
+upload_widget.observe(read_uploaded_file, names='value')
+def split_text(text, chunk_size=300, overlap=50):
+    chunks = []
+    start = 0
+    while start < len(text):
+        end = start + chunk_size
+        chunk = text[start:end]
+        chunks.append(chunk)
+        start += chunk_size - overlap
+    return chunks
+    documents = split_text(text)
+    print(f"\nSplit into {len(documents)} chunks.")
+    model = SentenceTransformer('all-MiniLM-L6-v2')
+    doc_embeddings = model.encode(documents)
+    print("Embeddings created for document chunks.")
+    embedding_dim = doc_embeddings.shape[1]
+    index = faiss.IndexFlatL2(embedding_dim)
+    index.add(np.array(doc_embeddings).astype('float32'))
+    print("FAISS index built.")
+    tokenizer = AutoTokenizer.from_pretrained("google/flan-t5-base")
+    model_t5 = AutoModelForSeq2SeqLM.from_pretrained("google/flan-t5-base")
+    print("T5 model and tokenizer loaded.")
+    def get_answer(question, k=3):
+        q_embedding = model.encode([question])
+        D, I = index.search(np.array(q_embedding).astype('float32'), k)
+        context = "\n".join([documents[i] for i in I[0]])
+        prompt = f"Answer the following question based on the provided context:\n{context}\n\nQuestion: {question}\nAnswer:"
+        inputs = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=512)
+        outputs = model_t5.generate(**inputs, max_length=200)
+        answer = tokenizer.decode(outputs[0], skip_special_tokens=True)
+
+        return answer
+    questions = [
+        "What services does the company offer?",
+        "What is the company's mission?",
+        "What are some milestones in the company's history?"
+    ]
+    print("\nGetting answers for sample questions:")
+    for q in questions:
+        print(f"\nQ: {q}")
+!pip install -q langchain openai faiss-cpu tiktoken ipywidgets sentence-transformers transformers torch
+from IPython import get_ipython
+from IPython.display import display
+import ipywidgets as widgets
+from IPython.display import display
+import numpy as np
+import faiss
+from sentence_transformers import SentenceTransformer
+from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
+import torch
+
+upload_widget = widgets.FileUpload(accept='.txt', multiple=False)
+display(upload_widget)
+
+text = ""
+
+def read_uploaded_file(change):
+    global text
+    if upload_widget.value:
+        uploaded_file = list(upload_widget.value.values())[0]
+        content_bytes = uploaded_file['content']
+        try:
+            text = content_bytes.decode('utf-8')
+            print(" Document loaded successfully with UTF-8!\n")
+        except UnicodeDecodeError:
+            try:
+                text = content_bytes.decode('latin-1')
+                print(" Document loaded successfully with latin-1!\n")
+            except UnicodeDecodeError:
+                print(" Could not decode the file using UTF-8 or latin-1.")
+                text = "" 
+        if text:
+            print(text[:1000])
+
+upload_widget.observe(read_uploaded_file, names='value')
+
+def split_text(text, chunk_size=300, overlap=50):
+    chunks = []
+    start = 0
+    while start < len(text):
+        end = start + chunk_size
+        chunk = text[start:end]
+        chunks.append(chunk)
+        start += chunk_size - overlap
+    return chunks
+if text:
+    documents = split_text(text)
+    print(f"\nSplit into {len(documents)} chunks.")
+    model = SentenceTransformer('all-MiniLM-L6-v2')
+    doc_embeddings = model.encode(documents)
+    print("Embeddings created for document chunks.")
+    embedding_dim = doc_embeddings.shape[1]
+    index = faiss.IndexFlatL2(embedding_dim)
+    index.add(np.array(doc_embeddings).astype('float32'))
+    print("FAISS index built.")
+    tokenizer = AutoTokenizer.from_pretrained("google/flan-t5-base")
+    model_t5 = AutoModelForSeq2SeqLM.from_pretrained("google/flan-t5-base")
+    print("T5 model and tokenizer loaded.")
+    def get_answer(question, k=3):
+        q_embedding = model.encode([question])
+        D, I = index.search(np.array(q_embedding).astype('float32'), k)
+        context = "\n".join([documents[i] for i in I[0]])
+        prompt = f"Answer the following question based on the provided context:\n{context}\n\nQuestion: {question}\nAnswer:"
+        inputs = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=512)
+        outputs = model_t5.generate(**inputs, max_length=200)
+        answer = tokenizer.decode(outputs[0], skip_special_tokens=True)
+
+        return answer
+    questions = [
+        "What services does the company offer?",
+        "What is the company's mission?",
+        "What are some milestones in the company's history?"
+    ]
+    print("\nGetting answers for sample questions:")
+    for q in questions:
+        print(f"\nQ: {q}")
+        print(f"A: {get_answer(q)}")
+        print("-" * 80)
+else:
+    print("Please upload a document using the widget above to continue.")
